@@ -6,8 +6,8 @@ import (
 	"io"
 	"math"
 
-	"github.com/golang/freetype/truetype"
 	"github.com/danfaizer/go-chart/util"
+	"github.com/golang/freetype/truetype"
 )
 
 const (
@@ -104,6 +104,7 @@ func (pc PieChart) Render(rp RendererProvider, w io.Writer) error {
 		return err
 	}
 	pc.drawSlices(r, canvasBox, finalValues)
+	pc.drawLegend(r, canvasBox, finalValues)
 	pc.drawTitle(r)
 	for _, a := range pc.Elements {
 		a(r, canvasBox, pc.styleDefaultsElements())
@@ -133,31 +134,23 @@ func (pc PieChart) drawSlices(r Renderer, canvasBox Box, values []Value) {
 	cx, cy := canvasBox.Center()
 	diameter := util.Math.MinInt(canvasBox.Width(), canvasBox.Height())
 	radius := float64(diameter >> 1)
-	labelRadius := (radius * 2.0) / 3.0
 
 	// draw the pie slices
 	var rads, delta, delta2, total float64
 	var lx, ly int
+	for index, v := range values {
+		v.Style.InheritFrom(pc.stylePieChartValue(index)).WriteToRenderer(r)
 
-	if len(values) == 1 {
-		pc.stylePieChartValue(0).WriteToRenderer(r)
 		r.MoveTo(cx, cy)
-		r.Circle(radius, cx, cy)
-	} else {
-		for index, v := range values {
-			v.Style.InheritFrom(pc.stylePieChartValue(index)).WriteToRenderer(r)
+		rads = util.Math.PercentToRadians(total)
+		delta = util.Math.PercentToRadians(v.Value)
 
-			r.MoveTo(cx, cy)
-			rads = util.Math.PercentToRadians(total)
-			delta = util.Math.PercentToRadians(v.Value)
+		r.ArcTo(cx, cy, radius, radius, rads, delta)
 
-			r.ArcTo(cx, cy, radius, radius, rads, delta)
-
-			r.LineTo(cx, cy)
-			r.Close()
-			r.FillStroke()
-			total = total + v.Value
-		}
+		r.LineTo(cx, cy)
+		r.Close()
+		r.FillStroke()
+		total = total + v.Value
 	}
 
 	// draw the labels
@@ -167,22 +160,57 @@ func (pc PieChart) drawSlices(r Renderer, canvasBox Box, values []Value) {
 		if len(v.Label) > 0 {
 			delta2 = util.Math.PercentToRadians(total + (v.Value / 2.0))
 			delta2 = util.Math.RadianAdd(delta2, _pi2)
-			lx, ly = util.Math.CirclePoint(cx, cy, labelRadius, delta2)
+			lx, ly = util.Math.CirclePoint(cx, cy, radius-20, delta2)
 
-			tb := r.MeasureText(v.Label)
+			r.SetFontColor(ColorWhite)
+
+			tb := r.MeasureText(fmt.Sprintf("%.0f", v.Value*100) + "%")
 			lx = lx - (tb.Width() >> 1)
 			ly = ly + (tb.Height() >> 1)
 
-			if lx < 0 {
-				lx = 0
-			}
-			if ly < 0 {
-				lx = 0
-			}
-
-			r.Text(v.Label, lx, ly)
+			//r.Text(fmt.Sprintf("%.0f", v.Value*100)+"%", lx, ly)
 		}
 		total = total + v.Value
+	}
+}
+
+func (pc PieChart) drawLegend(r Renderer, canvasBox Box, values []Value) {
+	var lx, ly int
+
+	for index, v := range values {
+		v.Style.InheritFrom(pc.stylePieChartValue(index)).WriteToRenderer(r)
+		if len(v.Label) > 0 {
+			symbolY := 250
+			symbolX := 20
+
+			labelHeight := 10
+			labelY := symbolY
+			labelX := symbolX + 25
+
+			lineSpacing := 15
+
+			lx = labelX
+			ly = labelY + labelHeight + index*lineSpacing
+
+			// Draw legend text
+			r.SetFontSize(8.0)
+			t := fmt.Sprintf("(%.0f) ", pc.Values[index].Value) + v.Label
+			if len(t) > 50 {
+				t = t[:50] + "..."
+			}
+			r.Text(t, lx, ly)
+
+			// Draw legend symbol
+			lx = symbolX
+			ly = symbolY + index*lineSpacing
+			r.SetFontColor(pc.stylePieChartValue(index).GetFillColor())
+			r.MoveTo(lx, ly)
+			r.LineTo(lx+15, ly)
+			r.LineTo(lx+15, ly+15)
+			r.LineTo(lx, ly+15)
+			r.Close()
+			r.FillStroke()
+		}
 	}
 }
 
