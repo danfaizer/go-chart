@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/blend/go-sdk/assert"
-	"github.com/wcharczuk/go-chart/util"
+	"github.com/danfaizer/go-chart/util"
 )
 
 func TestRangeTranslate(t *testing.T) {
